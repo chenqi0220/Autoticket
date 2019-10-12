@@ -81,7 +81,7 @@ class Concert(object):
         except Exception as e:
             print(e)
 
-            
+
     def login(self):
         if not exists('cookies.pkl'):  # 如果不存在cookie.pkl,就获取一下
             if self.browser == 0: # 选择了Chrome浏览器
@@ -100,16 +100,17 @@ class Concert(object):
             self.driver = webdriver.Chrome(options=options)
         elif self.browser == 1: # 选择了火狐浏览器
             options = webdriver.FirefoxProfile()
-            options.set_preference('permissions.default.image', 2)  
+            options.set_preference('permissions.default.image', 2)
             self.driver = webdriver.Firefox(options)
-        else: 
+        else:
             raise Exception("***错误：未知的浏览器类别***")
         self.driver.get(self.target_url)
         self.set_cookie()
         self.driver.maximize_window()
+        # sleep(2)
         self.driver.refresh()
-        
-        
+
+
     def enter_concert(self):
         self.login()
         try:
@@ -127,21 +128,21 @@ class Concert(object):
             raise Exception("***错误：登录失败,尝试删除cookie后重试***")
             self.driver.quit()
 
-            
+
     def choose_ticket_1(self):  # for type 1, i.e., detail.damai.cn
         self.time_start = time()
         print("###开始进行日期及票价选择###")
 
         while self.driver.title.find('确认订单') == -1:  # 如果跳转到了确认界面就算这步成功了，否则继续执行此步
             self.num += 1 # 记录抢票轮数
-            
+
             if self.date != 0: # 如果需要选择日期
                 calendar = WebDriverWait(self.driver, self.total_wait_time, self.refresh_wait_time).until(
                     EC.presence_of_element_located((By.CLASS_NAME, "functional-calendar")))
                 datelist = calendar.find_elements_by_css_selector("[class='wh_content_item']") # 找到能选择的日期
                 datelist = datelist[7:] # 跳过前面7个表示周一~周日的元素
                 datelist[self.date - 1].click() # 选择对应日期
-            
+
             selects = self.driver.find_elements_by_class_name('perform__order__select')
             # print('可选区域数量为：{}'.format(len(selects)))
             for item in selects:
@@ -154,12 +155,17 @@ class Concert(object):
 
             session_list = session.find_elements_by_class_name('select_right_list_item')
             print('可选场次数量为：{}'.format(len(session_list)))
+            #Fix 在界面加上一个加载时间，修复刷新问题
+            self.driver.set_page_load_timeout(5)
             for i in self.session:  # 根据优先级选择一个可行场次
                 j = session_list[i - 1]
                 k = self.isClassPresent(j, 'presell', True)
                 if k:  # 如果找到了带presell的类
                     if k.text == '无票':
-                        continue
+                        while True:
+                            self.driver.refresh()
+                            print('---当前无票,刷新等待~---')
+                            continue
                     elif k.text == '预售':
                         j.click()
                         break
@@ -183,12 +189,14 @@ class Concert(object):
 
             buybutton = self.driver.find_element_by_class_name('buybtn')
             buybutton_text = buybutton.text
-
+            # Fix 在界面加上一个加载时间，修复刷新问题
+            self.driver.set_page_load_timeout(5)
             if buybutton_text == "即将开抢" or buybutton_text == "即将开售":
                 self.status = 2
-                self.driver.refresh()
-                print('---尚未开售，刷新等待---')
-                continue
+                while True:
+                    self.driver.refresh()
+                    print('---尚未开售，刷新等待---')
+                    continue
 
             elif buybutton_text == "立即预订":
                 for i in range(self.ticket_num - 1):  # 设置增加票数
@@ -211,12 +219,12 @@ class Concert(object):
             elif buybutton_text == "选座购买":  # 选座购买暂时无法完成自动化
                 # buybutton.click()
                 self.status = 5
-                print("###请自行选择位置和票价###")
+                print("###请自行选择位置和票价###")  # 此处或可改成input，等待用户选完后反馈，继续抢票流程
                 break
 
             elif buybutton_text == "提交缺货登记":
-                print('###抢票失败，请手动提交缺货登记###')
-                break
+               print('###抢票失败，请手动提交缺货登记###')
+               break
 
                 
     def choose_ticket_2(self):  # for type 2, i.e., piao.damai.cn
@@ -290,13 +298,17 @@ class Concert(object):
                     print('###无法立即购买，尝试自行选座###')
                     try:
                         buybutton = self.driver.find_element_by_id('btnXuanzuo')
+                        # Fix 在界面加上一个加载时间，修复刷新问题
+                        self.driver.set_page_load_timeout(5)
                         self.status = 5
                         print("###请自行选择位置和票价###")
                         break
                     except:
-                        print('---尚未开售，刷新等待---')
-                        self.status = 2
-                        self.driver.refresh()
+                        while True:
+                            print('---尚未开售，刷新等待---')
+                            self.status = 2
+                            self.driver.refresh()
+                            continue
                         
             # 需要先判断是否存在按钮，才能确定是否会出现添加票
             if self.ticket_num > 1 and self.status not in [2, 5]:  # 自动添加购票数
@@ -415,6 +427,6 @@ if __name__ == '__main__':
                 con.choose_ticket_2()
                 con.check_order_2()
             con.finish()
-            # break
+			# break
         except Exception as e:
             print(e)
